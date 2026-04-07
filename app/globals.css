@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { box-sizing: border-box; }
+
+  body {
+    @apply bg-surface text-white antialiased;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { @apply bg-surface; }
+  ::-webkit-scrollbar-thumb { @apply bg-border rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-muted; }
+}
+
+@layer components {
+  .field-label {
+    @apply block text-xs font-medium text-muted mb-1.5;
+  }
+
+  .field-input {
+    @apply block w-full bg-surface-3 border border-border rounded-lg px-3 py-2 text-sm text-white
+           placeholder-muted/50 focus:outline-none focus:ring-1 focus:ring-accent/60 focus:border-accent/60
+           transition-colors;
+  }
+
+  select.field-input option {
+    @apply bg-surface-3 text-white;
+  }
+
+  .btn-ghost {
+    @apply text-muted hover:text-white hover:bg-surface-3 rounded px-2 py-1 transition-colors text-sm;
+  }
+
+  .panel-header {
+    @apply flex items-center justify-between px-4 py-3 border-b border-border;
+  }
+}
