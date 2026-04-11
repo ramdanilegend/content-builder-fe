@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef } from 'react';
 import { Layers, Settings, Database, Clapperboard, Save, FolderOpen } from 'lucide-react';
-import { BlueprintProvider, useBlueprint, serializeBlueprint } from '@/context/BlueprintContext';
+import { BlueprintProvider, useBlueprint, serializeBlueprint, deserializeBlueprint } from '@/context/BlueprintContext';
 import type { Blueprint, AssetItem } from '@/types/blueprint';
 
 import SceneList from '@/components/SceneList';
@@ -36,6 +36,20 @@ async function exportZip(
   const blob = await zip.generateAsync({ type: 'blob' });
   const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'blueprint';
   saveAs(blob, `${slug}-blueprint.zip`);
+}
+
+// ─── Blueprint JSON Export (no assets) ───────────────────────────────────────
+
+function exportBlueprintJson(blueprint: ReturnType<typeof serializeBlueprint>, title: string) {
+  const json = JSON.stringify(blueprint, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'blueprint';
+  a.download = `${slug}.blueprint.json`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ─── Workspace Save ───────────────────────────────────────────────────────────
@@ -126,7 +140,9 @@ function AppInner() {
   const [exporting, setExporting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [importingBlueprint, setImportingBlueprint] = useState(false);
   const loadInputRef = useRef<HTMLInputElement>(null);
+  const importBlueprintRef = useRef<HTMLInputElement>(null);
 
   const handleExportZip = useCallback(async () => {
     setExporting(true);
@@ -166,6 +182,29 @@ function AppInner() {
       alert(`Load failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setLoading(false);
+      e.target.value = '';
+    }
+  }, [dispatch]);
+
+  const handleExportBlueprint = useCallback(() => {
+    const json = getJson();
+    exportBlueprintJson(json, state.blueprint.meta.title);
+  }, [getJson, state.blueprint.meta.title]);
+
+  const handleImportBlueprint = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportingBlueprint(true);
+    try {
+      const text = await file.text();
+      const output = JSON.parse(text);
+      const blueprint = deserializeBlueprint(output);
+      dispatch({ type: 'LOAD_BLUEPRINT', blueprint });
+    } catch (err) {
+      console.error('Import blueprint failed', err);
+      alert(`Import failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setImportingBlueprint(false);
       e.target.value = '';
     }
   }, [dispatch]);
@@ -265,8 +304,18 @@ function AppInner() {
           onExportZip={handleExportZip}
           onSaveWorkspace={handleSaveWorkspace}
           onLoadWorkspace={() => loadInputRef.current?.click()}
+          onExportBlueprint={handleExportBlueprint}
+          onImportBlueprint={() => importBlueprintRef.current?.click()}
           saving={saving}
           loading={loading}
+          importingBlueprint={importingBlueprint}
+        />
+        <input
+          ref={importBlueprintRef}
+          type="file"
+          accept=".json"
+          className="hidden"
+          onChange={handleImportBlueprint}
         />
       </aside>
     </div>

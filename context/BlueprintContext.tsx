@@ -5,6 +5,7 @@ import type {
   Blueprint, Scene, Layer, AssetItem, Assets,
   Meta, Defaults, SceneAudio, SceneDuration,
   OutputBlueprint, OutputDefaults, OutputLayer, OutputScene,
+  AnchorType, OutputAssetMap,
 } from '@/types/blueprint';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -375,6 +376,59 @@ export function serializeBlueprint(blueprint: Blueprint): OutputBlueprint {
       audio: mapAssets(blueprint.assets.audio),
     },
     scenes: blueprint.scenes.map(cleanScene),
+  };
+}
+
+// ─── Blueprint Deserializer (OutputBlueprint → Blueprint) ────────────────────
+
+export function deserializeBlueprint(output: OutputBlueprint): Blueprint {
+  // Parse "WxH" resolution string back to object
+  const [w, h] = (output.meta?.resolution ?? '1920x1080').split('x').map(Number);
+
+  // Convert { id: path } asset maps back to AssetItem arrays (no file objects)
+  const mapToArray = (map: OutputAssetMap = {}): AssetItem[] =>
+    Object.entries(map).map(([id, path]) => ({
+      id,
+      path,
+      filename: path.split('/').pop() ?? id,
+    }));
+
+  // Reconstruct Scene from OutputScene (add _id to layers, flatten effects)
+  const parseScene = (s: OutputScene): Scene => ({
+    id: s.id,
+    type: s.type as Scene['type'],
+    duration: s.duration,
+    layers: (s.layers ?? []).map(l => ({ ...l, _id: uid() })),
+    audio: s.audio ?? {},
+    effects: s.effects?.map(e => e.type) ?? [],
+  });
+
+  return {
+    meta: {
+      title: output.meta?.title ?? 'Imported Blueprint',
+      ratio: output.meta?.ratio ?? '16:9',
+      fps: output.meta?.fps ?? 30,
+      resolution: { width: w || 1920, height: h || 1080 },
+    },
+    defaults: {
+      duration: output.defaults?.duration?.fallback_ms ?? 5000,
+      subtitle: output.defaults?.subtitle?.enabled ?? true,
+      voice: output.defaults?.voice?.voice ?? 'en-US-JennyNeural',
+      speed: output.defaults?.voice?.speed ?? 0.95,
+      pitch: output.defaults?.voice?.pitch ?? 1.0,
+      position: {
+        x: 50,
+        y: 50,
+        anchor: (output.defaults?.position?.anchor ?? 'center') as AnchorType,
+        unit: 'percent',
+      },
+    },
+    assets: {
+      images: mapToArray(output.assets?.images),
+      videos: mapToArray(output.assets?.videos),
+      audio:  mapToArray(output.assets?.audio),
+    },
+    scenes: (output.scenes ?? []).map(parseScene),
   };
 }
 
