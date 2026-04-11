@@ -8,18 +8,19 @@ import type { Assets, AssetItem } from '@/types/blueprint';
 
 type AssetType = keyof Assets;
 
-const SECTIONS: { key: AssetType; label: string; accept: string; icon: React.ReactNode }[] = [
-  { key: 'images', label: 'Images', accept: 'image/*', icon: <ImageIcon size={14} /> },
-  { key: 'videos', label: 'Videos', accept: 'video/*', icon: <Film size={14} /> },
-  { key: 'audio',  label: 'Audio',  accept: 'audio/*', icon: <Music size={14} /> },
+const SECTIONS: { key: AssetType; label: string; accept: string; folder: string; icon: React.ReactNode }[] = [
+  { key: 'images', label: 'Images', accept: 'image/*', folder: 'images', icon: <ImageIcon size={14} /> },
+  { key: 'videos', label: 'Videos', accept: 'video/*', folder: 'videos', icon: <Film size={14} /> },
+  { key: 'audio',  label: 'Audio',  accept: 'audio/*', folder: 'audio',  icon: <Music size={14} /> },
 ];
 
 function AssetSection({
-  label, icon, accept, items, onAdd, onRemove,
+  label, icon, accept, folder, items, onAdd, onRemove,
 }: {
   label: string;
   icon: React.ReactNode;
   accept: string;
+  folder: string;
   items: AssetItem[];
   onAdd: (item: AssetItem) => void;
   onRemove: (id: string) => void;
@@ -29,10 +30,9 @@ function AssetSection({
   const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     files.forEach(file => {
-      const ext = file.name.split('.').pop() ?? '';
       const base = file.name.replace(/\.[^.]+$/, '').replace(/[^a-z0-9_-]/gi, '_').toLowerCase();
       const id = `${base}_${uid().slice(-4)}`;
-      const path = `assets/${file.name}`;
+      const path = `assets/${folder}/${file.name}`;
       onAdd({ id, path, filename: file.name, file });
     });
     e.target.value = '';
@@ -91,12 +91,13 @@ export default function AssetManager() {
         Use the <span className="text-accent font-mono">id</span> to reference assets in layers.
       </p>
 
-      {SECTIONS.map(({ key, label, accept, icon }) => (
+      {SECTIONS.map(({ key, label, accept, folder, icon }) => (
         <AssetSection
           key={key}
           label={label}
           icon={icon}
           accept={accept}
+          folder={folder}
           items={assets[key]}
           onAdd={item => dispatch({ type: 'ADD_ASSET', assetType: key, item })}
           onRemove={id => dispatch({ type: 'REMOVE_ASSET', assetType: key, id })}

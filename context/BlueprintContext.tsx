@@ -4,7 +4,7 @@ import React, { createContext, useContext, useReducer, useCallback } from 'react
 import type {
   Blueprint, Scene, Layer, AssetItem, Assets,
   Meta, Defaults, SceneAudio, SceneDuration,
-  OutputBlueprint, OutputLayer, OutputScene, OutputAssetItem,
+  OutputBlueprint, OutputDefaults, OutputLayer, OutputScene,
 } from '@/types/blueprint';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -55,6 +55,8 @@ const initialBlueprint: Blueprint = {
     duration: 5000,
     subtitle: true,
     voice: 'en-US-JennyNeural',
+    speed: 0.95,
+    pitch: 1.0,
     position: defaultPosition(),
   },
   assets: { images: [], videos: [], audio: [] },
@@ -299,19 +301,74 @@ function cleanScene(s: Scene): OutputScene {
     layers: s.layers.map(cleanLayer),
     audio: {},
   };
-  if (s.audio.voice?.text) out.audio.voice = s.audio.voice;
+  if (s.audio.voice?.text) {
+    out.audio.voice = {
+      text: s.audio.voice.text,
+      voice: s.audio.voice.voice,
+      ...(s.audio.voice.speed !== undefined && { speed: s.audio.voice.speed }),
+      ...(s.audio.voice.pitch !== undefined && { pitch: s.audio.voice.pitch }),
+    };
+  }
   if (s.audio.bgm?.src) out.audio.bgm = s.audio.bgm;
-  if (s.effects && s.effects.length > 0) out.effects = s.effects;
+  if (s.effects && s.effects.length > 0) {
+    out.effects = s.effects.map(e => ({ type: e, duration_ms: 500 }));
+  }
   return out;
 }
 
 export function serializeBlueprint(blueprint: Blueprint): OutputBlueprint {
-  const mapAssets = (arr: AssetItem[]): OutputAssetItem[] =>
-    arr.map(({ id, path }) => ({ id, path }));
+  // Convert array to object map { id: path }
+  const mapAssets = (arr: AssetItem[]): Record<string, string> =>
+    Object.fromEntries(arr.map(({ id, path }) => [id, path]));
+
+  // Resolution as "WxH" string
+  const { width, height } = blueprint.meta.resolution;
+  const resolutionStr = `${width}x${height}`;
+
+  // Transform internal defaults into backend-expected format
+  const defaults: OutputDefaults = {
+    duration: {
+      mode: 'auto',
+      fallback_ms: blueprint.defaults.duration,
+      end_delay_ms: 400,
+    },
+    position: {
+      unit: blueprint.defaults.position.unit,
+      anchor: blueprint.defaults.position.anchor,
+    },
+    voice: {
+      provider: 'edge_tts',
+      voice: blueprint.defaults.voice,
+      speed: blueprint.defaults.speed,
+      pitch: blueprint.defaults.pitch,
+    },
+    subtitle: {
+      enabled: blueprint.defaults.subtitle,
+      mode: 'burn',
+      source: 'voice',
+      style: {
+        font_size: 52,
+        color: '#FFFFFF',
+        stroke_color: '#000000',
+        stroke_width: 3,
+        font_weight: 'bold',
+      },
+      position: {
+        x: 50,
+        y: 83,
+        anchor: 'bottom-center',
+      },
+    },
+  };
 
   return {
-    meta: blueprint.meta,
-    defaults: blueprint.defaults,
+    meta: {
+      title: blueprint.meta.title,
+      ratio: blueprint.meta.ratio,
+      resolution: resolutionStr,
+      fps: blueprint.meta.fps,
+    },
+    defaults,
     assets: {
       images: mapAssets(blueprint.assets.images),
       videos: mapAssets(blueprint.assets.videos),

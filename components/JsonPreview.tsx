@@ -1,10 +1,18 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Copy, Check, Download } from 'lucide-react';
+import { Copy, Check, Download, Save, FolderOpen } from 'lucide-react';
 import { useBlueprint, serializeBlueprint } from '@/context/BlueprintContext';
 
-export default function JsonPreview({ onExportZip }: { onExportZip: () => void }) {
+interface Props {
+  onExportZip: () => void;
+  onSaveWorkspace: () => void;
+  onLoadWorkspace: () => void;
+  saving?: boolean;
+  loading?: boolean;
+}
+
+export default function JsonPreview({ onExportZip, onSaveWorkspace, onLoadWorkspace, saving, loading }: Props) {
   const { state } = useBlueprint();
   const [copied, setCopied] = useState(false);
   const [json, setJson] = useState('');
@@ -29,6 +37,7 @@ export default function JsonPreview({ onExportZip }: { onExportZip: () => void }
 
   return (
     <div className="flex flex-col h-full">
+      {/* Top action row */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border shrink-0">
         <span className="text-xs font-semibold uppercase tracking-widest text-muted">JSON Preview</span>
         <div className="flex items-center gap-1.5">
@@ -49,6 +58,29 @@ export default function JsonPreview({ onExportZip }: { onExportZip: () => void }
             Export ZIP
           </button>
         </div>
+      </div>
+
+      {/* Workspace row */}
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-border shrink-0 bg-surface-2">
+        <span className="text-xs text-muted flex-1">Workspace</span>
+        <button
+          onClick={onSaveWorkspace}
+          disabled={saving}
+          className="btn-ghost text-xs flex items-center gap-1 disabled:opacity-50"
+          title="Save Workspace (includes assets)"
+        >
+          <Save size={12} />
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+        <button
+          onClick={onLoadWorkspace}
+          disabled={loading}
+          className="btn-ghost text-xs flex items-center gap-1 disabled:opacity-50"
+          title="Load Workspace from file"
+        >
+          <FolderOpen size={12} />
+          {loading ? 'Loading…' : 'Load'}
+        </button>
       </div>
 
       {uploadedCount > 0 && (

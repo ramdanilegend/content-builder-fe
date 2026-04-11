@@ -2,17 +2,12 @@
 
 import { useBlueprint } from '@/context/BlueprintContext';
 import type { AnchorType } from '@/types/blueprint';
+import VoicePicker from './VoicePicker';
 
 const ANCHORS: AnchorType[] = [
   'top-left', 'top-center', 'top-right',
   'center-left', 'center', 'center-right',
   'bottom-left', 'bottom-center', 'bottom-right',
-];
-
-const VOICES = [
-  'en-US-JennyNeural', 'en-US-GuyNeural', 'en-US-AriaNeural',
-  'en-GB-SoniaNeural', 'en-GB-RyanNeural',
-  'id-ID-GadisNeural', 'id-ID-ArdiNeural',
 ];
 
 export default function DefaultsEditor() {
@@ -49,14 +44,43 @@ export default function DefaultsEditor() {
 
       <label className="block">
         <span className="field-label">Default Voice</span>
-        <select
-          className="field-input"
-          value={defaults.voice}
-          onChange={e => set({ voice: e.target.value })}
-        >
-          {VOICES.map(v => <option key={v}>{v}</option>)}
-        </select>
+        <div className="mt-1">
+          <VoicePicker value={defaults.voice} onChange={v => set({ voice: v })} />
+        </div>
       </label>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <div className="flex justify-between">
+            <span className="field-label mb-0">Speed</span>
+            <span className="text-xs text-accent font-mono">{defaults.speed.toFixed(2)}x</span>
+          </div>
+          <input
+            type="range" min={0.5} max={2.0} step={0.05}
+            value={defaults.speed}
+            onChange={e => set({ speed: Number(e.target.value) })}
+            className="w-full accent-accent h-1.5 cursor-pointer"
+          />
+          <div className="flex justify-between text-[10px] text-muted">
+            <span>0.5x</span><span>2.0x</span>
+          </div>
+        </div>
+        <div className="space-y-1">
+          <div className="flex justify-between">
+            <span className="field-label mb-0">Pitch</span>
+            <span className="text-xs text-accent font-mono">{defaults.pitch.toFixed(2)}x</span>
+          </div>
+          <input
+            type="range" min={0.5} max={2.0} step={0.05}
+            value={defaults.pitch}
+            onChange={e => set({ pitch: Number(e.target.value) })}
+            className="w-full accent-accent h-1.5 cursor-pointer"
+          />
+          <div className="flex justify-between text-[10px] text-muted">
+            <span>0.5x</span><span>2.0x</span>
+          </div>
+        </div>
+      </div>
 
       <div className="space-y-2">
         <span className="field-label block">Default Position</span>
