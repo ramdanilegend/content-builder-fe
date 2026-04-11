@@ -24,6 +24,8 @@ export interface Defaults {
   duration: number;
   subtitle: boolean;
   voice: string;
+  speed: number;
+  pitch: number;
   position: Position;
 }
 
@@ -66,6 +68,8 @@ export interface Layer {
 export interface VoiceConfig {
   text: string;
   voice: string;
+  speed?: number;
+  pitch?: number;
 }
 
 export interface BgmConfig {
@@ -102,11 +106,21 @@ export interface Blueprint {
 
 // ─── JSON output types (no _id, no File objects) ─────────────────────────────
 
-export interface OutputAssetItem { id: string; path: string }
+/** assets.images / .videos / .audio → { "asset_id": "assets/images/file.jpg" } */
+export type OutputAssetMap = Record<string, string>;
+
 export interface OutputAssets {
-  images: OutputAssetItem[];
-  videos: OutputAssetItem[];
-  audio: OutputAssetItem[];
+  images: OutputAssetMap;
+  videos: OutputAssetMap;
+  audio: OutputAssetMap;
+}
+
+/** meta.resolution is serialized as "WxH" string e.g. "1080x1920" */
+export interface OutputMeta {
+  title: string;
+  ratio: AspectRatio;
+  resolution: string;
+  fps: number;
 }
 
 export interface OutputLayer {
@@ -121,18 +135,42 @@ export interface OutputLayer {
   animation?: LayerAnimation;
 }
 
+export interface OutputEffect {
+  type: string;
+  duration_ms: number;
+}
+
 export interface OutputScene {
   id: string;
   type: string;
   duration: SceneDuration;
   layers: OutputLayer[];
   audio: SceneAudio;
-  effects?: string[];
+  effects?: OutputEffect[];
+}
+
+export interface OutputDefaults {
+  duration: { mode: string; fallback_ms: number; end_delay_ms: number };
+  position: { unit: string; anchor: string };
+  voice: { provider: string; voice: string; speed: number; pitch: number };
+  subtitle: {
+    enabled: boolean;
+    mode: string;
+    source: string;
+    style: {
+      font_size: number;
+      color: string;
+      stroke_color: string;
+      stroke_width: number;
+      font_weight: string;
+    };
+    position: { x: number; y: number; anchor: string };
+  };
 }
 
 export interface OutputBlueprint {
-  meta: Meta;
-  defaults: Defaults;
+  meta: OutputMeta;
+  defaults: OutputDefaults;
   assets: OutputAssets;
   scenes: OutputScene[];
 }

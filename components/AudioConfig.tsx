@@ -2,12 +2,7 @@
 
 import { useBlueprint } from '@/context/BlueprintContext';
 import type { SceneAudio } from '@/types/blueprint';
-
-const VOICES = [
-  'en-US-JennyNeural', 'en-US-GuyNeural', 'en-US-AriaNeural',
-  'en-GB-SoniaNeural', 'en-GB-RyanNeural',
-  'id-ID-GadisNeural', 'id-ID-ArdiNeural',
-];
+import VoicePicker from './VoicePicker';
 
 export default function AudioConfig({ sceneId }: { sceneId: string }) {
   const { state, dispatch, selectedScene } = useBlueprint();
@@ -53,14 +48,51 @@ export default function AudioConfig({ sceneId }: { sceneId: string }) {
             </label>
             <label className="block">
               <span className="text-xs text-muted">Voice</span>
-              <select
-                className="field-input mt-1"
-                value={audio.voice?.voice ?? ''}
-                onChange={e => update({ voice: { ...audio.voice!, voice: e.target.value } })}
-              >
-                {VOICES.map(v => <option key={v}>{v}</option>)}
-              </select>
+              <div className="mt-1">
+                <VoicePicker
+                  value={audio.voice?.voice ?? ''}
+                  onChange={v => update({ voice: { ...audio.voice!, voice: v } })}
+                  previewText={audio.voice?.text}
+                />
+              </div>
             </label>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-xs text-muted">Speed</span>
+                  <span className="text-xs text-accent font-mono">
+                    {(audio.voice?.speed ?? 0.95).toFixed(2)}x
+                  </span>
+                </div>
+                <input
+                  type="range" min={0.5} max={2.0} step={0.05}
+                  value={audio.voice?.speed ?? 0.95}
+                  onChange={e => update({ voice: { ...audio.voice!, speed: Number(e.target.value) } })}
+                  className="w-full accent-accent h-1.5 cursor-pointer"
+                />
+                <div className="flex justify-between text-[10px] text-muted">
+                  <span>0.5x</span><span>2.0x</span>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-xs text-muted">Pitch</span>
+                  <span className="text-xs text-accent font-mono">
+                    {(audio.voice?.pitch ?? 1.0).toFixed(2)}x
+                  </span>
+                </div>
+                <input
+                  type="range" min={0.5} max={2.0} step={0.05}
+                  value={audio.voice?.pitch ?? 1.0}
+                  onChange={e => update({ voice: { ...audio.voice!, pitch: Number(e.target.value) } })}
+                  className="w-full accent-accent h-1.5 cursor-pointer"
+                />
+                <div className="flex justify-between text-[10px] text-muted">
+                  <span>0.5x</span><span>2.0x</span>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>
