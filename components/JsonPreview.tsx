@@ -1,18 +1,21 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Copy, Check, Download, Save, FolderOpen } from 'lucide-react';
+import { Copy, Check, Download, Save, FolderOpen, FileDown, Upload } from 'lucide-react';
 import { useBlueprint, serializeBlueprint } from '@/context/BlueprintContext';
 
 interface Props {
   onExportZip: () => void;
   onSaveWorkspace: () => void;
   onLoadWorkspace: () => void;
+  onExportBlueprint: () => void;
+  onImportBlueprint: () => void;
   saving?: boolean;
   loading?: boolean;
+  importingBlueprint?: boolean;
 }
 
-export default function JsonPreview({ onExportZip, onSaveWorkspace, onLoadWorkspace, saving, loading }: Props) {
+export default function JsonPreview({ onExportZip, onSaveWorkspace, onLoadWorkspace, onExportBlueprint, onImportBlueprint, saving, loading, importingBlueprint }: Props) {
   const { state } = useBlueprint();
   const [copied, setCopied] = useState(false);
   const [json, setJson] = useState('');
@@ -80,6 +83,28 @@ export default function JsonPreview({ onExportZip, onSaveWorkspace, onLoadWorksp
         >
           <FolderOpen size={12} />
           {loading ? 'Loading…' : 'Load'}
+        </button>
+      </div>
+
+      {/* Blueprint row */}
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-border shrink-0 bg-surface-2">
+        <span className="text-xs text-muted flex-1">Blueprint</span>
+        <button
+          onClick={onExportBlueprint}
+          className="btn-ghost text-xs flex items-center gap-1"
+          title="Export blueprint.json (structure only, no assets)"
+        >
+          <FileDown size={12} />
+          Export
+        </button>
+        <button
+          onClick={onImportBlueprint}
+          disabled={importingBlueprint}
+          className="btn-ghost text-xs flex items-center gap-1 disabled:opacity-50"
+          title="Import blueprint.json"
+        >
+          <Upload size={12} />
+          {importingBlueprint ? 'Importing…' : 'Import'}
         </button>
       </div>
 
