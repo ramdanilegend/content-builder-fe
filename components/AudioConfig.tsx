@@ -36,6 +36,17 @@ export default function AudioConfig({ sceneId }: { sceneId: string }) {
 
         {hasVoice && (
           <div className="space-y-2">
+            {/* Render toggle */}
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                className="w-4 h-4 accent-accent rounded"
+                checked={audio.voice?.render !== false}
+                onChange={e => update({ voice: { ...audio.voice!, render: e.target.checked } })}
+              />
+              <span className="text-xs text-muted">Render audio in final video</span>
+            </label>
+
             <label className="block">
               <span className="text-xs text-muted">Script text</span>
               <textarea

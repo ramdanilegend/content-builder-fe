@@ -23,6 +23,9 @@ export interface Position {
 export interface Defaults {
   duration: number;
   subtitle: boolean;
+  subtitleStyle: SubtitleStyleConfig;
+  subtitlePosition: SubtitlePositionConfig;
+  subtitleGranularity: 'sentence' | 'word';
   voice: string;
   speed: number;
   pitch: number;
@@ -51,13 +54,30 @@ export interface LayerAnimation {
   duration: number;
 }
 
+/** Inline style object (used when blueprint defines per-layer style as JSON) */
+export interface LayerStyleObject {
+  font_size?: number;
+  font_family?: string;
+  color?: string;
+  stroke_color?: string;
+  stroke_width?: number;
+  font_weight?: string;
+  max_width_pct?: number;
+  letter_spacing?: number;
+  text_align?: 'left' | 'center' | 'right';
+  italic?: boolean;
+}
+
+/** style can be a preset name string (e.g. "title_center") or an inline style object */
+export type LayerStyle = string | LayerStyleObject;
+
 export interface Layer {
   /** internal React key only – stripped from JSON output */
   _id: string;
   type: 'text' | 'image' | 'video';
   src?: string;
   content?: string;
-  style?: string;
+  style?: LayerStyle;
   loop?: boolean;
   position: Position;
   size?: { width: number };
@@ -70,6 +90,25 @@ export interface VoiceConfig {
   voice: string;
   speed?: number;
   pitch?: number;
+  /** If false, TTS audio is NOT mixed into the final video (subtitle text still shown) */
+  render?: boolean;
+}
+
+/** Subtitle text styling (mirrors backend SubtitleRenderer style fields) */
+export interface SubtitleStyleConfig {
+  font_size: number;
+  color: string;
+  stroke_color: string;
+  stroke_width: number;
+  font_weight: 'normal' | 'bold';
+  font_family: string;
+  max_width_pct: number;
+}
+
+export interface SubtitlePositionConfig {
+  x: number;
+  y: number;
+  anchor: AnchorType;
 }
 
 export interface BgmConfig {
@@ -88,13 +127,20 @@ export interface SceneDuration {
   ms?: number;
 }
 
+export type SceneEffectType = 'fade_in' | 'fade_out' | 'fade';
+
+export interface SceneEffect {
+  type: SceneEffectType;
+  duration_ms: number;
+}
+
 export interface Scene {
   id: string;
   type: 'intro' | 'main' | 'outro';
   duration: SceneDuration;
   layers: Layer[];
   audio: SceneAudio;
-  effects?: string[];
+  effects?: SceneEffect[];
 }
 
 export interface Blueprint {
@@ -127,7 +173,7 @@ export interface OutputLayer {
   type: 'text' | 'image' | 'video';
   src?: string;
   content?: string;
-  style?: string;
+  style?: LayerStyle;
   loop?: boolean;
   position: Position;
   size?: { width: number };
@@ -157,12 +203,15 @@ export interface OutputDefaults {
     enabled: boolean;
     mode: string;
     source: string;
+    granularity: string;
     style: {
       font_size: number;
       color: string;
       stroke_color: string;
       stroke_width: number;
       font_weight: string;
+      font_family: string;
+      max_width_pct: number;
     };
     position: { x: number; y: number; anchor: string };
   };

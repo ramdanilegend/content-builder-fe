@@ -5,7 +5,7 @@ import type {
   Blueprint, Scene, Layer, AssetItem, Assets,
   Meta, Defaults, SceneAudio, SceneDuration,
   OutputBlueprint, OutputDefaults, OutputLayer, OutputScene,
-  AnchorType, OutputAssetMap,
+  AnchorType, OutputAssetMap, SubtitleStyleConfig, SubtitlePositionConfig,
 } from '@/types/blueprint';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -55,6 +55,17 @@ const initialBlueprint: Blueprint = {
   defaults: {
     duration: 5000,
     subtitle: true,
+    subtitleStyle: {
+      font_size: 52,
+      color: '#FFFFFF',
+      stroke_color: '#000000',
+      stroke_width: 3,
+      font_weight: 'bold' as const,
+      font_family: 'Poppins',
+      max_width_pct: 85,
+    },
+    subtitlePosition: { x: 50, y: 83, anchor: 'bottom-center' as AnchorType },
+    subtitleGranularity: 'sentence' as const,
     voice: 'en-US-JennyNeural',
     speed: 0.95,
     pitch: 1.0,
@@ -308,11 +319,13 @@ function cleanScene(s: Scene): OutputScene {
       voice: s.audio.voice.voice,
       ...(s.audio.voice.speed !== undefined && { speed: s.audio.voice.speed }),
       ...(s.audio.voice.pitch !== undefined && { pitch: s.audio.voice.pitch }),
+      // omit render field when true (true is the default); only emit when explicitly disabled
+      ...(s.audio.voice.render === false && { render: false }),
     };
   }
   if (s.audio.bgm?.src) out.audio.bgm = s.audio.bgm;
   if (s.effects && s.effects.length > 0) {
-    out.effects = s.effects.map(e => ({ type: e, duration_ms: 500 }));
+    out.effects = s.effects.map(e => ({ type: e.type, duration_ms: e.duration_ms }));
   }
   return out;
 }
@@ -347,17 +360,20 @@ export function serializeBlueprint(blueprint: Blueprint): OutputBlueprint {
       enabled: blueprint.defaults.subtitle,
       mode: 'burn',
       source: 'voice',
+      granularity: blueprint.defaults.subtitleGranularity ?? 'sentence',
       style: {
-        font_size: 52,
-        color: '#FFFFFF',
-        stroke_color: '#000000',
-        stroke_width: 3,
-        font_weight: 'bold',
+        font_size:    blueprint.defaults.subtitleStyle?.font_size    ?? 52,
+        color:        blueprint.defaults.subtitleStyle?.color        ?? '#FFFFFF',
+        stroke_color: blueprint.defaults.subtitleStyle?.stroke_color ?? '#000000',
+        stroke_width: blueprint.defaults.subtitleStyle?.stroke_width ?? 3,
+        font_weight:  blueprint.defaults.subtitleStyle?.font_weight  ?? 'bold',
+        font_family:  blueprint.defaults.subtitleStyle?.font_family  ?? 'Poppins',
+        max_width_pct: blueprint.defaults.subtitleStyle?.max_width_pct ?? 85,
       },
       position: {
-        x: 50,
-        y: 83,
-        anchor: 'bottom-center',
+        x:      blueprint.defaults.subtitlePosition?.x      ?? 50,
+        y:      blueprint.defaults.subtitlePosition?.y      ?? 83,
+        anchor: blueprint.defaults.subtitlePosition?.anchor ?? 'bottom-center',
       },
     },
   };
@@ -398,9 +414,13 @@ export function deserializeBlueprint(output: OutputBlueprint): Blueprint {
     id: s.id,
     type: s.type as Scene['type'],
     duration: s.duration,
-    layers: (s.layers ?? []).map(l => ({ ...l, _id: uid() })),
+    layers: (s.layers ?? []).map(l => ({
+      ...l,
+      _id: uid(),
+      position: l.position ?? { x: 50, y: 50, anchor: 'center' as AnchorType, unit: 'percent' as const },
+    })),
     audio: s.audio ?? {},
-    effects: s.effects?.map(e => e.type) ?? [],
+    effects: s.effects?.map(e => ({ type: e.type as import('@/types/blueprint').SceneEffectType, duration_ms: e.duration_ms ?? 500 })) ?? [],
   });
 
   return {
@@ -413,6 +433,21 @@ export function deserializeBlueprint(output: OutputBlueprint): Blueprint {
     defaults: {
       duration: output.defaults?.duration?.fallback_ms ?? 5000,
       subtitle: output.defaults?.subtitle?.enabled ?? true,
+      subtitleStyle: {
+        font_size:    output.defaults?.subtitle?.style?.font_size    ?? 52,
+        color:        output.defaults?.subtitle?.style?.color        ?? '#FFFFFF',
+        stroke_color: output.defaults?.subtitle?.style?.stroke_color ?? '#000000',
+        stroke_width: output.defaults?.subtitle?.style?.stroke_width ?? 3,
+        font_weight:  ((output.defaults?.subtitle?.style as any)?.font_weight ?? 'bold') as 'normal' | 'bold',
+        font_family:  (output.defaults?.subtitle?.style as any)?.font_family  ?? 'Poppins',
+        max_width_pct: output.defaults?.subtitle?.style?.max_width_pct ?? 85,
+      },
+      subtitlePosition: {
+        x:      output.defaults?.subtitle?.position?.x      ?? 50,
+        y:      output.defaults?.subtitle?.position?.y      ?? 83,
+        anchor: (output.defaults?.subtitle?.position?.anchor ?? 'bottom-center') as AnchorType,
+      },
+      subtitleGranularity: (output.defaults?.subtitle?.granularity as 'sentence' | 'word') ?? 'sentence',
       voice: output.defaults?.voice?.voice ?? 'en-US-JennyNeural',
       speed: output.defaults?.voice?.speed ?? 0.95,
       pitch: output.defaults?.voice?.pitch ?? 1.0,

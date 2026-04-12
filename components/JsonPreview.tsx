@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Copy, Check, Download, Save, FolderOpen, FileDown, Upload } from 'lucide-react';
 import { useBlueprint, serializeBlueprint } from '@/context/BlueprintContext';
+import GeneratePanel, { type GenerateStatus } from './GeneratePanel';
 
 interface Props {
   onExportZip: () => void;
@@ -10,12 +11,31 @@ interface Props {
   onLoadWorkspace: () => void;
   onExportBlueprint: () => void;
   onImportBlueprint: () => void;
+  onGenerate: () => void;
+  outputFilename: string;
+  onOutputFilenameChange: (value: string) => void;
+  generateStatus: GenerateStatus;
+  generateError?: string;
   saving?: boolean;
   loading?: boolean;
   importingBlueprint?: boolean;
 }
 
-export default function JsonPreview({ onExportZip, onSaveWorkspace, onLoadWorkspace, onExportBlueprint, onImportBlueprint, saving, loading, importingBlueprint }: Props) {
+export default function JsonPreview({
+  onExportZip,
+  onSaveWorkspace,
+  onLoadWorkspace,
+  onExportBlueprint,
+  onImportBlueprint,
+  onGenerate,
+  outputFilename,
+  onOutputFilenameChange,
+  generateStatus,
+  generateError,
+  saving,
+  loading,
+  importingBlueprint,
+}: Props) {
   const { state } = useBlueprint();
   const [copied, setCopied] = useState(false);
   const [json, setJson] = useState('');
@@ -107,6 +127,16 @@ export default function JsonPreview({ onExportZip, onSaveWorkspace, onLoadWorksp
           {importingBlueprint ? 'Importing…' : 'Import'}
         </button>
       </div>
+
+      {/* ── Generate Video panel ── */}
+      <GeneratePanel
+        outputFilename={outputFilename}
+        onOutputFilenameChange={onOutputFilenameChange}
+        onGenerate={onGenerate}
+        status={generateStatus}
+        errorMessage={generateError}
+        assetCount={uploadedCount}
+      />
 
       {uploadedCount > 0 && (
         <div className="px-3 py-1.5 bg-accent/10 border-b border-accent/20 shrink-0">

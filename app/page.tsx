@@ -4,6 +4,7 @@ import { useState, useCallback, useRef } from 'react';
 import { Layers, Settings, Database, Clapperboard, Save, FolderOpen } from 'lucide-react';
 import { BlueprintProvider, useBlueprint, serializeBlueprint, deserializeBlueprint } from '@/context/BlueprintContext';
 import type { Blueprint, AssetItem } from '@/types/blueprint';
+import type { GenerateStatus } from '@/components/GeneratePanel';
 
 import SceneList from '@/components/SceneList';
 import SceneEditor from '@/components/SceneEditor';
@@ -122,6 +123,56 @@ async function loadWorkspace(
   dispatch({ type: 'LOAD_BLUEPRINT', blueprint });
 }
 
+// ─── Generate Video ───────────────────────────────────────────────────────────
+
+/**
+ * Sends blueprint + all asset files to the content-builder Python API,
+ * waits for the rendered .mp4, then triggers a browser download.
+ *
+ * Payload (multipart/form-data):
+ *   blueprint        → JSON string of the serialised blueprint
+ *   output_filename  → desired filename (without .mp4)
+ *   <asset-path>     → one file field per asset; field-name = relative path
+ *                      e.g.  "assets/images/hero.jpg"
+ */
+async function generateVideo(
+  blueprint: ReturnType<typeof serializeBlueprint>,
+  assetFiles: { path: string; file: File }[],
+  outputFilename: string,
+): Promise<void> {
+  const apiUrl =
+    process.env.NEXT_PUBLIC_CONTENT_BUILDER_API_URL?.replace(/\/$/, '') ||
+    'http://localhost:8000';
+
+  const formData = new FormData();
+  formData.append('blueprint', JSON.stringify(blueprint));
+  formData.append('output_filename', outputFilename.trim() || 'output');
+
+  for (const { path, file } of assetFiles) {
+    // field-name is the relative path so the backend knows where to save it
+    formData.append(path, file, file.name);
+  }
+
+  const res = await fetch(`${apiUrl}/generate`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => res.statusText);
+    throw new Error(detail || `Server error ${res.status}`);
+  }
+
+  const blob = await res.blob();
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  const safe = outputFilename.trim().replace(/[^a-z0-9 _-]/gi, '_') || 'output';
+  a.download = `${safe}.mp4`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // ─── Left sidebar tab types ───────────────────────────────────────────────────
 
 type SideTab = 'meta' | 'defaults' | 'assets';
@@ -143,6 +194,11 @@ function AppInner() {
   const [importingBlueprint, setImportingBlueprint] = useState(false);
   const loadInputRef = useRef<HTMLInputElement>(null);
   const importBlueprintRef = useRef<HTMLInputElement>(null);
+
+  // Generate video state
+  const [outputFilename, setOutputFilename] = useState<string>('');
+  const [generateStatus, setGenerateStatus] = useState<GenerateStatus>('idle');
+  const [generateError, setGenerateError] = useState<string | undefined>();
 
   const handleExportZip = useCallback(async () => {
     setExporting(true);
@@ -190,6 +246,26 @@ function AppInner() {
     const json = getJson();
     exportBlueprintJson(json, state.blueprint.meta.title);
   }, [getJson, state.blueprint.meta.title]);
+
+  const handleGenerate = useCallback(async () => {
+    setGenerateStatus('generating');
+    setGenerateError(undefined);
+    try {
+      const json  = getJson();
+      const files = getAllAssetFiles();
+      // Use the explicit output filename; fall back to the blueprint title
+      const name  = outputFilename.trim() || state.blueprint.meta.title || 'output';
+      await generateVideo(json, files, name);
+      setGenerateStatus('success');
+      // Reset to idle after a short delay so user sees the success tick
+      setTimeout(() => setGenerateStatus('idle'), 4000);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      console.error('Generate failed', err);
+      setGenerateStatus('error');
+      setGenerateError(msg);
+    }
+  }, [getJson, getAllAssetFiles, outputFilename, state.blueprint.meta.title]);
 
   const handleImportBlueprint = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -306,6 +382,11 @@ function AppInner() {
           onLoadWorkspace={() => loadInputRef.current?.click()}
           onExportBlueprint={handleExportBlueprint}
           onImportBlueprint={() => importBlueprintRef.current?.click()}
+          onGenerate={handleGenerate}
+          outputFilename={outputFilename}
+          onOutputFilenameChange={setOutputFilename}
+          generateStatus={generateStatus}
+          generateError={generateError}
           saving={saving}
           loading={loading}
           importingBlueprint={importingBlueprint}
