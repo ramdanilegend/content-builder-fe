@@ -36,7 +36,7 @@ export default function AudioConfig({ sceneId }: { sceneId: string }) {
 
         {hasVoice && (
           <div className="space-y-2">
-            {/* Render toggle */}
+            {/* Render toggles */}
             <label className="flex items-center gap-2 cursor-pointer select-none">
               <input
                 type="checkbox"
@@ -45,6 +45,15 @@ export default function AudioConfig({ sceneId }: { sceneId: string }) {
                 onChange={e => update({ voice: { ...audio.voice!, render: e.target.checked } })}
               />
               <span className="text-xs text-muted">Render audio in final video</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                className="w-4 h-4 accent-accent rounded"
+                checked={audio.voice?.render_subtitle !== false}
+                onChange={e => update({ voice: { ...audio.voice!, render_subtitle: e.target.checked } })}
+              />
+              <span className="text-xs text-muted">Render subtitle in final video</span>
             </label>
 
             <label className="block">

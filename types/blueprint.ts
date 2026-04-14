@@ -92,6 +92,8 @@ export interface VoiceConfig {
   pitch?: number;
   /** If false, TTS audio is NOT mixed into the final video (subtitle text still shown) */
   render?: boolean;
+  /** If false, subtitle is NOT rendered in the final video */
+  render_subtitle?: boolean;
 }
 
 /** Subtitle text styling (mirrors backend SubtitleRenderer style fields) */
@@ -192,6 +194,9 @@ export interface OutputScene {
   duration: SceneDuration;
   layers: OutputLayer[];
   audio: SceneAudio;
+  /** Per-scene subtitle override. Backend checks scene.subtitle.enabled first,
+   *  then falls back to defaults.subtitle.enabled. */
+  subtitle?: { enabled: boolean };
   effects?: OutputEffect[];
 }
 

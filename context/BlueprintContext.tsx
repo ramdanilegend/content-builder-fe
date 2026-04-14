@@ -322,6 +322,12 @@ function cleanScene(s: Scene): OutputScene {
       // omit render field when true (true is the default); only emit when explicitly disabled
       ...(s.audio.voice.render === false && { render: false }),
     };
+    // Per-scene subtitle override: backend reads scene.subtitle.enabled,
+    // not a field inside audio.voice. Emit the override only when disabled
+    // so the default (enabled) path stays clean.
+    if (s.audio.voice.render_subtitle === false) {
+      out.subtitle = { enabled: false };
+    }
   }
   if (s.audio.bgm?.src) out.audio.bgm = s.audio.bgm;
   if (s.effects && s.effects.length > 0) {
@@ -340,6 +346,16 @@ export function serializeBlueprint(blueprint: Blueprint): OutputBlueprint {
   const resolutionStr = `${width}x${height}`;
 
   // Transform internal defaults into backend-expected format
+
+  // If every voice-enabled scene has explicitly disabled subtitles,
+  // reflect that in the global flag so backends that only check
+  // defaults.subtitle.enabled also honour the user's intent.
+  const voiceScenes = blueprint.scenes.filter(s => !!s.audio.voice?.text);
+  const allScenesDisableSubtitle =
+    voiceScenes.length > 0 &&
+    voiceScenes.every(s => s.audio.voice?.render_subtitle === false);
+  const subtitleEnabled = blueprint.defaults.subtitle && !allScenesDisableSubtitle;
+
   const defaults: OutputDefaults = {
     duration: {
       mode: 'auto',
@@ -357,7 +373,7 @@ export function serializeBlueprint(blueprint: Blueprint): OutputBlueprint {
       pitch: blueprint.defaults.pitch,
     },
     subtitle: {
-      enabled: blueprint.defaults.subtitle,
+      enabled: subtitleEnabled,
       mode: 'burn',
       source: 'voice',
       granularity: blueprint.defaults.subtitleGranularity ?? 'sentence',
@@ -410,18 +426,26 @@ export function deserializeBlueprint(output: OutputBlueprint): Blueprint {
     }));
 
   // Reconstruct Scene from OutputScene (add _id to layers, flatten effects)
-  const parseScene = (s: OutputScene): Scene => ({
-    id: s.id,
-    type: s.type as Scene['type'],
-    duration: s.duration,
-    layers: (s.layers ?? []).map(l => ({
-      ...l,
-      _id: uid(),
-      position: l.position ?? { x: 50, y: 50, anchor: 'center' as AnchorType, unit: 'percent' as const },
-    })),
-    audio: s.audio ?? {},
-    effects: s.effects?.map(e => ({ type: e.type as import('@/types/blueprint').SceneEffectType, duration_ms: e.duration_ms ?? 500 })) ?? [],
-  });
+  const parseScene = (s: OutputScene): Scene => {
+    const audio = s.audio ?? {};
+    // Restore per-scene render_subtitle flag from the scene-level subtitle
+    // override that was emitted during serialization.
+    const voice = audio.voice
+      ? { ...audio.voice, ...(s.subtitle?.enabled === false && { render_subtitle: false }) }
+      : audio.voice;
+    return {
+      id: s.id,
+      type: s.type as Scene['type'],
+      duration: s.duration,
+      layers: (s.layers ?? []).map(l => ({
+        ...l,
+        _id: uid(),
+        position: l.position ?? { x: 50, y: 50, anchor: 'center' as AnchorType, unit: 'percent' as const },
+      })),
+      audio: { ...audio, voice },
+      effects: s.effects?.map(e => ({ type: e.type as import('@/types/blueprint').SceneEffectType, duration_ms: e.duration_ms ?? 500 })) ?? [],
+    };
+  };
 
   return {
     meta: {
