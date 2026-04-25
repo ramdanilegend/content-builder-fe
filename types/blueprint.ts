@@ -145,11 +145,34 @@ export interface Scene {
   effects?: SceneEffect[];
 }
 
+// ─── Global timeline audio clip (spans across scene boundaries) ───────────────
+
+export interface TimelineAudioClip {
+  /** internal React key */
+  id: string;
+  /** asset id from assets.audio */
+  src: string;
+  /** absolute start ms from video start */
+  startMs: number;
+  /** clip length in ms */
+  durationMs: number;
+  /** 0.0 – 1.0 */
+  volume: number;
+  /** fade in duration ms */
+  fadeInMs: number;
+  /** fade out duration ms */
+  fadeOutMs: number;
+  /** optional display label */
+  label?: string;
+}
+
 export interface Blueprint {
   meta: Meta;
   defaults: Defaults;
   assets: Assets;
   scenes: Scene[];
+  /** Global audio tracks – independent of scene boundaries, draggable on timeline */
+  audioTracks?: TimelineAudioClip[];
 }
 
 // ─── JSON output types (no _id, no File objects) ─────────────────────────────
@@ -222,9 +245,21 @@ export interface OutputDefaults {
   };
 }
 
+export interface OutputAudioTrack {
+  id: string;
+  src: string;
+  start_ms: number;
+  duration_ms: number;
+  volume: number;
+  fade_in_ms: number;
+  fade_out_ms: number;
+  label?: string;
+}
+
 export interface OutputBlueprint {
   meta: OutputMeta;
   defaults: OutputDefaults;
   assets: OutputAssets;
   scenes: OutputScene[];
+  audio_tracks?: OutputAudioTrack[];
 }

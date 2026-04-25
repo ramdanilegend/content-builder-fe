@@ -3,8 +3,8 @@
 import React, { createContext, useContext, useReducer, useCallback } from 'react';
 import type {
   Blueprint, Scene, Layer, AssetItem, Assets,
-  Meta, Defaults, SceneAudio, SceneDuration,
-  OutputBlueprint, OutputDefaults, OutputLayer, OutputScene,
+  Meta, Defaults, SceneAudio, SceneDuration, TimelineAudioClip,
+  OutputBlueprint, OutputDefaults, OutputLayer, OutputScene, OutputAudioTrack,
   AnchorType, OutputAssetMap, SubtitleStyleConfig, SubtitlePositionConfig,
 } from '@/types/blueprint';
 
@@ -43,6 +43,8 @@ interface State {
   selectedSceneId: string | null;
   selectedLayerId: string | null;
   activeTab: 'meta' | 'defaults' | 'assets';
+  past: Blueprint[];   // undo stack (max 50)
+  future: Blueprint[]; // redo stack
 }
 
 const initialBlueprint: Blueprint = {
@@ -80,6 +82,8 @@ const initialState: State = {
   selectedSceneId: null,
   selectedLayerId: null,
   activeTab: 'meta',
+  past: [],
+  future: [],
 };
 
 // ─── Actions ─────────────────────────────────────────────────────────────────
@@ -102,61 +106,67 @@ type Action =
   | { type: 'SELECT_SCENE'; id: string | null }
   | { type: 'SELECT_LAYER'; id: string | null }
   | { type: 'SET_ACTIVE_TAB'; tab: State['activeTab'] }
-  | { type: 'LOAD_BLUEPRINT'; blueprint: Blueprint };
+  | { type: 'LOAD_BLUEPRINT'; blueprint: Blueprint }
+  // ── History ──────────────────────────────────────────────────────────────
+  | { type: 'UNDO' }
+  | { type: 'REDO' }
+  // ── Timeline operations ──────────────────────────────────────────────────
+  | { type: 'SPLIT_SCENE'; id: string; atMs: number }
+  | { type: 'SET_SCENE_DURATION_MS'; id: string; ms: number }
+  // ── Global audio tracks ───────────────────────────────────────────────
+  | { type: 'ADD_AUDIO_TRACK'; clip: TimelineAudioClip }
+  | { type: 'UPDATE_AUDIO_TRACK'; id: string; payload: Partial<TimelineAudioClip> }
+  | { type: 'REMOVE_AUDIO_TRACK'; id: string };
+
+// Push current blueprint onto history before mutations
+function withHistory(state: State, nextBlueprint: Blueprint, nextState?: Partial<State>): State {
+  const past = [...state.past.slice(-49), state.blueprint];
+  return { ...state, blueprint: nextBlueprint, past, future: [], ...nextState };
+}
 
 function reducer(state: State, action: Action): State {
   const { blueprint } = state;
 
   switch (action.type) {
     case 'SET_META':
-      return { ...state, blueprint: { ...blueprint, meta: { ...blueprint.meta, ...action.payload } } };
+      return withHistory(state, { ...blueprint, meta: { ...blueprint.meta, ...action.payload } });
 
     case 'SET_DEFAULTS':
-      return { ...state, blueprint: { ...blueprint, defaults: { ...blueprint.defaults, ...action.payload } } };
+      return withHistory(state, { ...blueprint, defaults: { ...blueprint.defaults, ...action.payload } });
 
     case 'ADD_ASSET':
-      return {
-        ...state,
-        blueprint: {
-          ...blueprint,
-          assets: {
-            ...blueprint.assets,
-            [action.assetType]: [...blueprint.assets[action.assetType], action.item],
-          },
+      return withHistory(state, {
+        ...blueprint,
+        assets: {
+          ...blueprint.assets,
+          [action.assetType]: [...blueprint.assets[action.assetType], action.item],
         },
-      };
+      });
 
     case 'REMOVE_ASSET':
-      return {
-        ...state,
-        blueprint: {
-          ...blueprint,
-          assets: {
-            ...blueprint.assets,
-            [action.assetType]: blueprint.assets[action.assetType].filter(a => a.id !== action.id),
-          },
+      return withHistory(state, {
+        ...blueprint,
+        assets: {
+          ...blueprint.assets,
+          [action.assetType]: blueprint.assets[action.assetType].filter(a => a.id !== action.id),
         },
-      };
+      });
 
     case 'ADD_SCENE': {
       const count = blueprint.scenes.length + 1;
       const scene = newScene(count);
-      return {
-        ...state,
+      return withHistory(state, { ...blueprint, scenes: [...blueprint.scenes, scene] }, {
         selectedSceneId: scene.id,
         selectedLayerId: null,
-        blueprint: { ...blueprint, scenes: [...blueprint.scenes, scene] },
-      };
+      });
     }
 
     case 'REMOVE_SCENE': {
       const scenes = blueprint.scenes.filter(s => s.id !== action.id);
-      return {
-        ...state,
+      return withHistory(state, { ...blueprint, scenes }, {
         selectedSceneId: scenes.length ? scenes[scenes.length - 1].id : null,
         selectedLayerId: null,
-        blueprint: { ...blueprint, scenes },
-      };
+      });
     }
 
     case 'MOVE_SCENE': {
@@ -167,88 +177,68 @@ function reducer(state: State, action: Action): State {
       } else if (action.direction === 'down' && idx < scenes.length - 1) {
         [scenes[idx], scenes[idx + 1]] = [scenes[idx + 1], scenes[idx]];
       }
-      return { ...state, blueprint: { ...blueprint, scenes } };
+      return withHistory(state, { ...blueprint, scenes });
     }
 
     case 'UPDATE_SCENE':
-      return {
-        ...state,
-        blueprint: {
-          ...blueprint,
-          scenes: blueprint.scenes.map(s =>
-            s.id === action.id ? { ...s, ...action.payload } : s
-          ),
-        },
-      };
+      return withHistory(state, {
+        ...blueprint,
+        scenes: blueprint.scenes.map(s =>
+          s.id === action.id ? { ...s, ...action.payload } : s
+        ),
+      });
 
     case 'SET_SCENE_DURATION':
-      return {
-        ...state,
-        blueprint: {
-          ...blueprint,
-          scenes: blueprint.scenes.map(s =>
-            s.id === action.id ? { ...s, duration: action.duration } : s
-          ),
-        },
-      };
+      return withHistory(state, {
+        ...blueprint,
+        scenes: blueprint.scenes.map(s =>
+          s.id === action.id ? { ...s, duration: action.duration } : s
+        ),
+      });
 
     case 'SET_SCENE_AUDIO':
-      return {
-        ...state,
-        blueprint: {
-          ...blueprint,
-          scenes: blueprint.scenes.map(s =>
-            s.id === action.id ? { ...s, audio: action.audio } : s
-          ),
-        },
-      };
+      return withHistory(state, {
+        ...blueprint,
+        scenes: blueprint.scenes.map(s =>
+          s.id === action.id ? { ...s, audio: action.audio } : s
+        ),
+      });
 
     case 'ADD_LAYER': {
       const layer = newLayer(action.layerType);
-      return {
-        ...state,
-        selectedLayerId: layer._id,
-        blueprint: {
-          ...blueprint,
-          scenes: blueprint.scenes.map(s =>
-            s.id === action.sceneId ? { ...s, layers: [...s.layers, layer] } : s
-          ),
-        },
-      };
+      return withHistory(state, {
+        ...blueprint,
+        scenes: blueprint.scenes.map(s =>
+          s.id === action.sceneId ? { ...s, layers: [...s.layers, layer] } : s
+        ),
+      }, { selectedLayerId: layer._id });
     }
 
     case 'REMOVE_LAYER': {
-      return {
-        ...state,
-        selectedLayerId: null,
-        blueprint: {
-          ...blueprint,
-          scenes: blueprint.scenes.map(s =>
-            s.id === action.sceneId
-              ? { ...s, layers: s.layers.filter(l => l._id !== action.layerId) }
-              : s
-          ),
-        },
-      };
+      return withHistory(state, {
+        ...blueprint,
+        scenes: blueprint.scenes.map(s =>
+          s.id === action.sceneId
+            ? { ...s, layers: s.layers.filter(l => l._id !== action.layerId) }
+            : s
+        ),
+      }, { selectedLayerId: null });
     }
 
     case 'UPDATE_LAYER':
-      return {
-        ...state,
-        blueprint: {
-          ...blueprint,
-          scenes: blueprint.scenes.map(s =>
-            s.id === action.sceneId
-              ? {
-                  ...s,
-                  layers: s.layers.map(l =>
-                    l._id === action.layerId ? { ...l, ...action.payload } : l
-                  ),
-                }
-              : s
-          ),
-        },
-      };
+      return withHistory(state, {
+        ...blueprint,
+        scenes: blueprint.scenes.map(s =>
+          s.id === action.sceneId
+            ? {
+                ...s,
+                layers: s.layers.map(l =>
+                  l._id === action.layerId ? { ...l, ...action.payload } : l
+                ),
+              }
+            : s
+        ),
+      });
 
     case 'MOVE_LAYER': {
       const scene = blueprint.scenes.find(s => s.id === action.sceneId);
@@ -260,13 +250,10 @@ function reducer(state: State, action: Action): State {
       } else if (action.direction === 'down' && idx < layers.length - 1) {
         [layers[idx], layers[idx + 1]] = [layers[idx + 1], layers[idx]];
       }
-      return {
-        ...state,
-        blueprint: {
-          ...blueprint,
-          scenes: blueprint.scenes.map(s => s.id === action.sceneId ? { ...s, layers } : s),
-        },
-      };
+      return withHistory(state, {
+        ...blueprint,
+        scenes: blueprint.scenes.map(s => s.id === action.sceneId ? { ...s, layers } : s),
+      });
     }
 
     case 'SELECT_SCENE':
@@ -279,7 +266,93 @@ function reducer(state: State, action: Action): State {
       return { ...state, activeTab: action.tab };
 
     case 'LOAD_BLUEPRINT':
-      return { ...state, blueprint: action.blueprint, selectedSceneId: null, selectedLayerId: null };
+      return { ...state, blueprint: action.blueprint, selectedSceneId: null, selectedLayerId: null, past: [], future: [] };
+
+    // ── Undo / Redo ────────────────────────────────────────────────────────
+
+    case 'UNDO': {
+      if (state.past.length === 0) return state;
+      const past = [...state.past];
+      const prev = past.pop()!;
+      return {
+        ...state,
+        blueprint: prev,
+        past,
+        future: [state.blueprint, ...state.future.slice(0, 49)],
+      };
+    }
+
+    case 'REDO': {
+      if (state.future.length === 0) return state;
+      const future = [...state.future];
+      const next = future.shift()!;
+      return {
+        ...state,
+        blueprint: next,
+        future,
+        past: [...state.past.slice(-49), state.blueprint],
+      };
+    }
+
+    // ── Timeline operations ────────────────────────────────────────────────
+
+    case 'SET_SCENE_DURATION_MS': {
+      const nextBp: Blueprint = {
+        ...blueprint,
+        scenes: blueprint.scenes.map(s =>
+          s.id === action.id ? { ...s, duration: { mode: 'fixed', ms: Math.max(500, action.ms) } } : s
+        ),
+      };
+      return withHistory(state, nextBp);
+    }
+
+    case 'SPLIT_SCENE': {
+      const sceneIdx = blueprint.scenes.findIndex(s => s.id === action.id);
+      if (sceneIdx === -1) return state;
+      const scene = blueprint.scenes[sceneIdx];
+      const totalMs = scene.duration.mode === 'fixed'
+        ? (scene.duration.ms ?? 5000)
+        : 5000;
+      const splitAt = Math.max(500, Math.min(action.atMs, totalMs - 500));
+      const firstDuration: SceneDuration = { mode: 'fixed', ms: splitAt };
+      const secondDuration: SceneDuration = { mode: 'fixed', ms: totalMs - splitAt };
+      const first: Scene = { ...scene, duration: firstDuration, layers: scene.layers.map(l => ({ ...l, _id: uid() })) };
+      const second: Scene = {
+        ...scene,
+        id: `${scene.id}_split`,
+        duration: secondDuration,
+        layers: scene.layers.map(l => ({ ...l, _id: uid() })),
+      };
+      const scenes = [
+        ...blueprint.scenes.slice(0, sceneIdx),
+        first,
+        second,
+        ...blueprint.scenes.slice(sceneIdx + 1),
+      ];
+      return withHistory(state, { ...blueprint, scenes }, { selectedSceneId: first.id });
+    }
+
+    // ── Global audio tracks ────────────────────────────────────────────────
+
+    case 'ADD_AUDIO_TRACK':
+      return withHistory(state, {
+        ...blueprint,
+        audioTracks: [...(blueprint.audioTracks ?? []), action.clip],
+      });
+
+    case 'UPDATE_AUDIO_TRACK':
+      return withHistory(state, {
+        ...blueprint,
+        audioTracks: (blueprint.audioTracks ?? []).map(t =>
+          t.id === action.id ? { ...t, ...action.payload } : t
+        ),
+      });
+
+    case 'REMOVE_AUDIO_TRACK':
+      return withHistory(state, {
+        ...blueprint,
+        audioTracks: (blueprint.audioTracks ?? []).filter(t => t.id !== action.id),
+      });
 
     default:
       return state;
@@ -394,6 +467,20 @@ export function serializeBlueprint(blueprint: Blueprint): OutputBlueprint {
     },
   };
 
+  const audioTracks: OutputAudioTrack[] | undefined =
+    blueprint.audioTracks && blueprint.audioTracks.length > 0
+      ? blueprint.audioTracks.map(t => ({
+          id:          t.id,
+          src:         t.src,
+          start_ms:    t.startMs,
+          duration_ms: t.durationMs,
+          volume:      t.volume,
+          fade_in_ms:  t.fadeInMs,
+          fade_out_ms: t.fadeOutMs,
+          ...(t.label ? { label: t.label } : {}),
+        }))
+      : undefined;
+
   return {
     meta: {
       title: blueprint.meta.title,
@@ -408,6 +495,7 @@ export function serializeBlueprint(blueprint: Blueprint): OutputBlueprint {
       audio: mapAssets(blueprint.assets.audio),
     },
     scenes: blueprint.scenes.map(cleanScene),
+    ...(audioTracks ? { audio_tracks: audioTracks } : {}),
   };
 }
 
@@ -488,6 +576,16 @@ export function deserializeBlueprint(output: OutputBlueprint): Blueprint {
       audio:  mapToArray(output.assets?.audio),
     },
     scenes: (output.scenes ?? []).map(parseScene),
+    audioTracks: (output.audio_tracks ?? []).map(t => ({
+      id:         t.id,
+      src:        t.src,
+      startMs:    t.start_ms,
+      durationMs: t.duration_ms,
+      volume:     t.volume,
+      fadeInMs:   t.fade_in_ms,
+      fadeOutMs:  t.fade_out_ms,
+      label:      t.label,
+    })),
   };
 }
 
@@ -500,6 +598,8 @@ interface Ctx {
   selectedLayer: Layer | undefined;
   getJson: () => OutputBlueprint;
   getAllAssetFiles: () => { path: string; file: File }[];
+  canUndo: boolean;
+  canRedo: boolean;
 }
 
 const BlueprintContext = createContext<Ctx | null>(null);
@@ -518,8 +618,11 @@ export function BlueprintProvider({ children }: { children: React.ReactNode }) {
     return all.filter(a => a.file).map(a => ({ path: a.path, file: a.file! }));
   }, [state.blueprint.assets]);
 
+  const canUndo = state.past.length > 0;
+  const canRedo = state.future.length > 0;
+
   return (
-    <BlueprintContext.Provider value={{ state, dispatch, selectedScene, selectedLayer, getJson, getAllAssetFiles }}>
+    <BlueprintContext.Provider value={{ state, dispatch, selectedScene, selectedLayer, getJson, getAllAssetFiles, canUndo, canRedo }}>
       {children}
     </BlueprintContext.Provider>
   );
